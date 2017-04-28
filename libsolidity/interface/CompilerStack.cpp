@@ -41,6 +41,7 @@
 #include <libsolidity/interface/Natspec.h>
 #include <libsolidity/interface/GasEstimator.h>
 #include <libsolidity/formal/Why3Translator.h>
+#include <libsolidity/codegen/ir/IRGenerate.h>
 
 #include <libevmasm/Exceptions.h>
 
@@ -328,6 +329,33 @@ bool CompilerStack::prepareFormalAnalysis(ErrorReporter* _errorReporter)
 	m_formalTranslation = translator.translation();
 
 	return true;
+}
+
+void CompilerStack::prepareJulia(ErrorReporter *_errorReporter)
+{
+	if (!_errorReporter)
+		_errorReporter = &m_errorReporter;
+	ir::IRGenerate julia(*_errorReporter);
+	for (Source const* source: m_sourceOrder)
+		julia.process(*source->ast);
+	m_juliaBody = julia.body();
+}
+
+#include <libsolidity/inlineasm/AsmPrinter.h>
+
+AssemblyStack const CompilerStack::assemblyStack() const
+{
+	/// TODO: return an assembly for each contract
+	ErrorList errors;
+	ErrorReporter errorReporter(errors);
+	JuliaCompiler julia(errorReporter);
+	for (Source const* source: m_sourceOrder)
+		julia.process(*source->ast);
+	cout << assembly::AsmPrinter()(julia.body()) << endl;
+	AssemblyStack stack;
+	/// TODO: set scanner
+	stack.analyze(julia.body());
+	return stack;
 }
 
 eth::AssemblyItems const* CompilerStack::assemblyItems(string const& _contractName) const
